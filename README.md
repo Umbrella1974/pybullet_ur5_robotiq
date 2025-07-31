@@ -34,6 +34,9 @@ Press `Z` to close the gripper and `R` to open it.
 
 See `heuristic demo` in `main.py`.
 
+## TroubleShooting
+- Some users report problems with MacOS. Please kindly note that this project is mainly tested on Ubuntu 20.04 and 22.04.
+
 ###  References
 https://github.com/matafela/pybullet_grasp_annotator_robotiq_85
 
