@@ -1,6 +1,7 @@
 experiment:
   participant_id: "P00"
   condition: "visual_only"
+  formal_experiment: false
   output_dir: "experiment2_data"
   random_seed: 42
   initial_settle_steps: 240

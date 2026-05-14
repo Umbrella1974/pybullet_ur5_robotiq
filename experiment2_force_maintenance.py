@@ -93,6 +93,7 @@ TIME_SERIES_FIELDS = [
     "trial_elapsed_sec",
     "participant_id",
     "condition",
+    "formal_experiment",
     "manual_start",
     "init_phase",
     "initial_pose_reached",
@@ -139,6 +140,10 @@ TIME_SERIES_FIELDS = [
 EVENT_FIELDS = [
     "timestamp_iso",
     "time_sec",
+    "trial_elapsed_sec",
+    "participant_id",
+    "condition",
+    "formal_experiment",
     "event_id",
     "event_type",
     "state",
@@ -556,6 +561,10 @@ class ExperimentLogger:
         event_type,
         timestamp_iso,
         time_sec,
+        trial_elapsed_sec,
+        participant_id,
+        condition,
+        formal_experiment,
         state,
         auto_direction,
         contact_force,
@@ -575,6 +584,10 @@ class ExperimentLogger:
                 {
                     "timestamp_iso": timestamp_iso,
                     "time_sec": f"{time_sec:.6f}",
+                    "trial_elapsed_sec": f"{trial_elapsed_sec:.6f}",
+                    "participant_id": participant_id,
+                    "condition": condition,
+                    "formal_experiment": int(bool(formal_experiment)),
                     "event_id": event_id,
                     "event_type": event_type,
                     "state": state,
@@ -711,6 +724,7 @@ class ExperimentRunner:
         self.initial_settle_steps = int(self.exp_cfg.get("initial_settle_steps", 0))
         self.auto_move_to_initial = bool(self.exp_cfg.get("auto_move_to_initial", False))
         self.manual_start_enabled = bool(self.exp_cfg.get("manual_start_enabled", True))
+        self.formal_experiment = bool(self.exp_cfg.get("formal_experiment", False))
         self.trial_duration_sec = float(
             self.exp_cfg.get(
                 "trial_duration_sec",
@@ -835,6 +849,10 @@ class ExperimentRunner:
             event_type=event_type,
             timestamp_iso=self.current_timestamp_iso(),
             time_sec=self.sim_time_sec,
+            trial_elapsed_sec=self.current_trial_elapsed_sec(),
+            participant_id=self.exp_cfg["participant_id"],
+            condition=self.condition,
+            formal_experiment=self.formal_experiment,
             state=self.state,
             auto_direction=self.auto_direction,
             contact_force=self.contact_force,
@@ -983,6 +1001,7 @@ class ExperimentRunner:
         print(f"Config: {self.config_path}")
         print(f"Time-series CSV: {self.time_series_path}")
         print(f"Event CSV: {self.event_path}")
+        print(f"Formal experiment: {self.formal_experiment}")
         self.print_instructions()
 
     def print_instructions(self):
@@ -1284,6 +1303,7 @@ class ExperimentRunner:
             "trial_elapsed_sec": f"{self.current_trial_elapsed_sec():.6f}",
             "participant_id": self.exp_cfg["participant_id"],
             "condition": self.condition,
+            "formal_experiment": to_int_flag(self.formal_experiment),
             "manual_start": to_int_flag(self.manual_start),
             "init_phase": to_int_flag(self.in_init_phase()),
             "initial_pose_reached": to_int_flag(self.initial_pose_reached),

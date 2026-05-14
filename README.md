@@ -1,19 +1,23 @@
 # pybullet_ur5_robotiq
 
-这个仓库当前主要用于在 PyBullet 中运行 UR5 + Robotiq 夹爪实验，重点是两个实验脚本：
+这个仓库当前主要用于在 PyBullet 中运行 UR5 + Robotiq 夹爪实验，当前最重要的两个脚本是：
 
 - `experiment1_contact_judgment.py`
   接触判断实验，对比 `visual_only` 和 `vision_haptic`
 - `experiment2_force_maintenance.py`
-  力维持实验，支持自动扰动、日志记录、结果绘图
+  力维持实验，支持自动扰动、ESP32 反馈、日志记录和后处理绘图
 
-如果你只是想快速上手，优先看“快速开始”和“Experiment 2 操作流程”这两节。
+如果你只是想快速开始，优先看：
+
+1. “快速开始”
+2. “Experiment 2 操作流程”
+3. “绘图与结果输出”
 
 ## 1. 环境准备
 
 建议使用 Python 3，并从项目根目录运行脚本。
 
-安装当前代码实际会用到的依赖：
+安装当前代码实际用到的依赖：
 
 ```bash
 pip install pybullet numpy pyyaml attrdict tqdm opencv-python scipy matplotlib
@@ -38,11 +42,13 @@ pip install pybullet numpy pyyaml attrdict tqdm opencv-python scipy matplotlib
 - `experiment2_config.yaml`
   实验 2 配置文件
 - `plot_experiment2_results.py`
-  读取实验 2 的 time-series CSV 并画图
+  实验 2 后处理与绘图脚本
 - `sevropwm_simulation.py`
   ESP32 端参考代码
 - `experiment2_data/`
-  实验 2 结果输出目录
+  实验 2 原始输出目录
+- `experiment2_figures/`
+  推荐的绘图输出目录
 
 ## 3. 快速开始
 
@@ -64,13 +70,13 @@ python main.py
 python experiment2_force_maintenance.py experiment2_config.yaml
 ```
 
-画实验 2 结果图：
+绘制实验 2 结果：
 
 ```bash
-python plot_experiment2_results.py experiment2_data
+python plot_experiment2_results.py --data-dir experiment2_data --out-dir experiment2_figures
 ```
 
-如果你只想先找一个合适的初始位姿：
+如果你想先找一个合适的初始位姿：
 
 ```bash
 python forcelevel_simulation.py
@@ -78,7 +84,7 @@ python forcelevel_simulation.py
 
 ## 4. 推荐操作顺序
 
-建议按下面的顺序使用这个仓库：
+建议按下面顺序使用这个仓库：
 
 1. 先运行 `forcelevel_simulation.py`，手动把机械臂调到一个合适的抓取准备位姿。
 2. 在该脚本里按 `V`，终端会打印当前 `initial_action` 的 YAML 片段。
@@ -86,7 +92,7 @@ python forcelevel_simulation.py
 4. 根据需要调整 `center_object.half_extents`，决定实验中的标准木块大小。
 5. 运行 `experiment2_force_maintenance.py experiment2_config.yaml`。
 6. 在 `INIT` 阶段微调姿态和夹爪，确认起始状态合适后按 `S` 开始正式 trial。
-7. 实验结束后，用 `plot_experiment2_results.py` 查看 time-series 曲线。
+7. 实验结束后，用 `plot_experiment2_results.py` 生成 summary 和图。
 
 ## 5. Experiment 2 操作流程
 
@@ -153,24 +159,39 @@ python forcelevel_simulation.py
 
 ```yaml
 experiment:
-  participant_id: "P00"
+  participant_id: "P01"
   condition: "visual_only"
+  formal_experiment: false
 ```
 
 - `participant_id`
-  参与者编号，会写入输出文件名
+  参与者编号，会写入输出文件名和 CSV
 - `condition`
   只能是 `visual_only` 或 `vision_haptic`
+- `formal_experiment`
+  `false` 表示调试运行
+  `true` 表示正式实验
+  绘图脚本默认只统计 `formal_experiment: true` 的数据，并只为正式实验自动生成 `trial_id`
 
 ### 是否向 ESP32 发送反馈
 
 ```yaml
 esp32:
   send_to_esp32: false
+  ip: "192.168.1.16"
+  port: 12345
+  feedback_send_period_sec: 0.10
+  keepalive_send_period_sec: 1.0
 ```
 
-- 没有连接 ESP32 时，建议固定为 `false`
-- `visual_only` 模式下，即使启用了发送，程序也会发送 `(0, 0)` 级别
+- `send_to_esp32`
+  是否真正建立 TCP 连接并发送反馈
+- `ip` / `port`
+  ESP32 的地址和端口
+- `feedback_send_period_sec`
+  正常反馈发送节流周期
+- `keepalive_send_period_sec`
+  payload 不变时的保活发送周期
 
 ### 初始位姿
 
@@ -267,7 +288,71 @@ state_machine:
 auto_grip_speed * (1 / 240)
 ```
 
-## 7. `forcelevel_simulation.py` 的用途
+## 7. 如何启用 `vision_haptic`
+
+### 最小配置
+
+如果你只想让实验进入 `vision_haptic` 条件，需要改这两处：
+
+```yaml
+experiment:
+  condition: "vision_haptic"
+
+esp32:
+  send_to_esp32: true
+```
+
+### 推荐完整配置
+
+```yaml
+experiment:
+  participant_id: "P01"
+  condition: "vision_haptic"
+  formal_experiment: true
+
+esp32:
+  send_to_esp32: true
+  ip: "192.168.1.16"
+  port: 12345
+  feedback_send_period_sec: 0.10
+  keepalive_send_period_sec: 1.0
+```
+
+### 真实行为说明
+
+- `visual_only`
+  脚本会把目标反馈固定成 `(0, 0)`，即使已连接 ESP32 也是这样
+- `vision_haptic`
+  脚本会把当前左右指尖等级发送给 ESP32
+  具体来自：
+  - 左指尖：`tf_level`
+  - 右指尖：`if_level`
+
+在代码里这一点由 [experiment2_force_maintenance.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/experiment2_force_maintenance.py:1237>) 的 `build_desired_feedback()` 控制。
+
+### 如果只想测试条件切换，但不真的发硬件
+
+你也可以这样配置：
+
+```yaml
+experiment:
+  condition: "vision_haptic"
+
+esp32:
+  send_to_esp32: false
+```
+
+这样程序内部仍按 `vision_haptic` 逻辑运行，但不会真正建立 TCP 发送。
+
+### ESP32 端
+
+- `sevropwm_simulation.py` 是 ESP32 端参考代码
+- 你需要保证 ESP32 的 IP / 端口和 YAML 一致
+- 运行时如果连接成功，终端会打印  
+  `Connected to ESP32 at ...`
+- 如果失败，实验不会直接崩溃，但会打印连接或发送错误
+
+## 8. `forcelevel_simulation.py` 的用途
 
 这个脚本更适合做两件事：
 
@@ -293,7 +378,7 @@ python forcelevel_simulation.py
 - `Q`
   退出
 
-## 8. Experiment 1 用法
+## 9. Experiment 1 用法
 
 运行格式：
 
@@ -310,9 +395,9 @@ python experiment1_contact_judgment.py P01 vision_haptic
   在 `visual_only` 和 `vision_haptic` 之间切换
 - 其余位置、姿态、夹爪按键基本沿用 `forcelevel_simulation.py`
 
-## 9. 输出文件
+## 10. 绘图与结果输出
 
-实验 2 默认输出到：
+实验 2 默认把原始结果写到：
 
 ```text
 experiment2_data/
@@ -325,12 +410,209 @@ experiment2_data/
 - `*_events.csv`
   事件日志
 
-`plot_experiment2_results.py` 主要读取 `*_timeseries.csv`：
+### 推荐绘图命令
 
-- 如果传入单个 CSV，会画这一轮 trial 的曲线
-- 如果传入一个目录或多个 CSV，也会尝试按 `condition` 画汇总图
+```bash
+python plot_experiment2_results.py --data-dir experiment2_data --out-dir experiment2_figures
+```
 
-## 10. 常见问题
+### 常用选项
+
+- `--summary`
+  生成 `experiment2_summary_by_trial.csv` 和按 `condition` 的汇总图
+- `--single "*170911_timeseries.csv"`
+  只为匹配到的单个 trial 生成详细图
+- `--all-trials`
+  为所有纳入分析的 trial 生成单 trial 图
+- `--include-nonformal`
+  连调试数据一起纳入；默认只统计 `formal_experiment: true` 的正式实验
+- `--paper-mode`
+  使用更适合论文的分辨率和字号，并额外导出 `SVG`
+- `--include-threshold-reaction`
+  额外计算并输出 `threshold_reaction_time` 相关图
+- `--recovery-hold-sec 0.2`
+  控制 `recovery_time` 所需的目标区间持续保持时间
+
+### `--paper-mode` 会输出什么
+
+`--paper-mode` 不改变“画哪些图”的逻辑，只改变：
+
+- 分辨率和字号
+- 每张图除 `PNG` 外额外导出 `SVG`
+
+如果你用的是 summary 模式，它会导出例如：
+
+- `mean_force_error_by_condition.png/.svg`
+- `in_target_range_ratio_by_condition.png/.svg`
+- `disturbance_response_time_by_condition.png/.svg`
+- `recovery_time_by_condition.png/.svg`
+- `target_range_ratio_stack.png/.svg`
+- `user_workload_by_condition.png/.svg`
+
+如果还加了 `--include-threshold-reaction`，会额外导出：
+
+- `threshold_reaction_time_by_condition.png/.svg`
+
+如果你用 `--single` 或 `--all-trials`，则每个 trial 还会导出：
+
+- `single_trial_overview_*.png/.svg`
+- `force_with_events_*.png/.svg`
+- `force_gripper_alignment_*.png/.svg`
+- `target_range_band_*.png/.svg`
+- `left_right_fingertip_forces_*.png/.svg`
+
+### 当前绘图脚本会生成哪些图
+
+单 trial 图：
+
+- `single_trial_overview_*`
+- `force_with_events_*`
+- `force_gripper_alignment_*`
+- `target_range_band_*`
+- `left_right_fingertip_forces_*`
+
+汇总图：
+
+- `mean_force_error_by_condition`
+- `in_target_range_ratio_by_condition`
+- `disturbance_response_time_by_condition`
+- `recovery_time_by_condition`
+- `target_range_ratio_stack`
+- `user_workload_by_condition`
+
+补充图：
+
+- `disturbance_response_time_close_only_by_condition`
+- `disturbance_response_time_open_only_by_condition`
+- `recovery_time_close_only_by_condition`
+- `recovery_time_open_only_by_condition`
+
+同时会输出：
+
+- `experiment2_summary_by_trial.csv`
+
+## 11. 如果想改曲线颜色、图例位置，怎么改
+
+这些改动都集中在 [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1>)，不需要改实验主脚本。
+
+### 1. 改全局分辨率、字号、导出风格
+
+看 `configure_plot_style(paper_mode)`：
+
+- [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:95>)
+
+这里控制：
+
+- `figure.dpi`
+- `savefig.dpi`
+- `font.size`
+- `axes.titlesize`
+- `legend.fontsize`
+
+如果你想统一把字变大、图变高清，就改这一段。
+
+### 2. 改按 condition 的颜色
+
+看 `plot_paired_metric()`：
+
+- [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:645>)
+
+当前是：
+
+```python
+colors = {"visual_only": "tab:gray", "vision_haptic": "tab:cyan"}
+```
+
+你可以直接改成，比如：
+
+```python
+colors = {"visual_only": "#666666", "vision_haptic": "#D55E00"}
+```
+
+### 3. 改单 trial 曲线颜色
+
+几个主要函数的位置：
+
+- `plot_single_trial_overview()`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:972>)
+- `plot_force_with_events()`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1014>)
+- `plot_force_gripper_alignment()`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1045>)
+- `plot_target_range_band()`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1085>)
+- `plot_left_right_fingertip_forces()`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1131>)
+
+你会看到很多类似：
+
+```python
+color="tab:red"
+color="tab:blue"
+color="tab:green"
+color="tab:orange"
+color="tab:purple"
+```
+
+直接改这些值就可以。
+
+### 4. 改事件标记颜色
+
+看这几个函数：
+
+- `event_legend_handles()`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:913>)
+- `add_event_markers()`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:945>)
+- `add_user_scatter()`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:955>)
+
+这里分别控制：
+
+- 自动夹紧开始竖线颜色
+- 自动松开开始竖线颜色
+- 用户 `Z/X` 标记颜色
+
+### 5. 改图例位置
+
+最直接的方法是改 `legend(loc="...")` 里的 `loc`。
+
+当前脚本里常见位置例如：
+
+- `loc="upper right"`
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:994>)
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1035>)
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1072>)
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1110>)
+  [plot_experiment2_results.py](</d:/research_history/first_one/research_code/pybullet_ur5_robotiq/plot_experiment2_results.py:1143>)
+
+你可以改成：
+
+- `"upper left"`
+- `"lower right"`
+- `"lower left"`
+- `"best"`
+
+例如：
+
+```python
+ax.legend(loc="upper left")
+```
+
+### 6. 颜色可以用什么格式
+
+Matplotlib 常见写法都可以：
+
+- 命名色
+  `tab:red`
+- 十六进制
+  `#D55E00`
+- RGB 元组
+  `(0.2, 0.4, 0.8)`
+
+如果你只是想快速换一套论文配色，最省事的方法就是把脚本里所有 `tab:*` 系列替换掉。
+
+## 12. 常见问题
 
 ### 1. 运行后没有窗口
 
@@ -369,20 +651,55 @@ python experiment2_force_maintenance.py experiment2_config.yaml
 - 你中途频繁按了 `Z / X`，程序会优先进入 `USER_CONTROL`
 - 当前接触状态不满足某个自动方向的触发条件
 
-### 5. `FORCE_ABOVE_HIGH / FORCE_BELOW_LOW / FORCE_BACK_IN_RANGE` 是不是核心控制逻辑
+### 5. 为什么默认跑绘图时没有任何正式数据
+
+因为绘图脚本默认只统计：
+
+- `formal_experiment: true`
+
+如果你现在目录里全是调试数据，就会被默认跳过。  
+这时有两种做法：
+
+- 正式采数据时，把 YAML 里的 `formal_experiment` 改成 `true`
+- 或者在绘图时显式加：
+
+```bash
+python plot_experiment2_results.py --data-dir experiment2_data --out-dir experiment2_figures --include-nonformal
+```
+
+### 6. `FORCE_ABOVE_HIGH / FORCE_BELOW_LOW / FORCE_BACK_IN_RANGE` 是不是核心控制逻辑
 
 不是。
 
 当前它们主要是事件日志，用来做后处理和可视化参考，不是状态机的核心驱动条件。
 
-## 11. 建议的最小工作流
+## 13. 建议的最小工作流
 
 如果你只是想尽快开始做实验，推荐直接按下面做：
 
 1. 安装依赖
-2. 把 `experiment2_config.yaml` 里的 `esp32.send_to_esp32` 设为 `false`
+2. 如果没有 ESP32，把 `experiment2_config.yaml` 里的 `esp32.send_to_esp32` 设为 `false`
 3. 用 `forcelevel_simulation.py` 找到一个满意的 `initial_action`
 4. 调整 `center_object.half_extents` 到你想要的木块大小
-5. 运行 `experiment2_force_maintenance.py experiment2_config.yaml`
-6. 在 `INIT` 阶段微调后按 `S`
-7. 实验结束后用 `plot_experiment2_results.py experiment2_data` 看结果
+5. 调试阶段保持：
+   - `formal_experiment: false`
+6. 正式采集前改成：
+   - `formal_experiment: true`
+   - `participant_id: "P01"` 之类的正式编号
+7. 运行：
+
+```bash
+python experiment2_force_maintenance.py experiment2_config.yaml
+```
+
+8. 画正式 summary：
+
+```bash
+python plot_experiment2_results.py --data-dir experiment2_data --out-dir experiment2_figures
+```
+
+9. 如果想连调试数据一起看：
+
+```bash
+python plot_experiment2_results.py --data-dir experiment2_data --out-dir experiment2_figures --include-nonformal
+```
