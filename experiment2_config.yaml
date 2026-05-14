@@ -1,0 +1,91 @@
+experiment:
+  participant_id: "P00"
+  condition: "visual_only"
+  output_dir: "experiment2_data"
+  random_seed: 42
+  initial_settle_steps: 240
+  auto_move_to_initial: true
+  manual_start_enabled: true
+  trial_duration_sec: 120.0
+  init_timeout_sec: 60.0
+
+esp32:
+  send_to_esp32: false
+  ip: "192.168.1.16"
+  port: 12345
+  feedback_send_period_sec: 0.10
+  keepalive_send_period_sec: 1.0
+
+links:
+  tf_link: 12
+  if_link: 17
+
+initial_action:
+  x: 0.0
+  y: 0.0
+  z: 0.5
+  roll: 0.0
+  pitch: 1.57079632679
+  yaw: 1.57079632679
+  gripper_opening: 0.04
+
+center_object:
+  enabled: true
+  replace_env_box: true
+  mass: 0.0
+  half_extents: [0.015, 0.015, 0.020]
+  position_offset_local: [0.0, 0.0, 0.0]
+  settle_steps: 30
+
+keyboard:
+  pos_step: 0.003
+  rot_step: 0.02
+  user_grip_step: 0.0010   # fixed gripper change per Z/X press
+  allow_condition_toggle: false
+
+limits:
+  x_min: -0.224
+  x_max: 0.224
+  y_min: -0.224
+  y_max: 0.224
+  z_min: 0.05
+  z_max: 1.0
+  roll_min: -3.141593
+  roll_max: 3.141593
+  pitch_min: -3.141593
+  pitch_max: 3.141593
+  yaw_min: -3.141593
+  yaw_max: 3.141593
+  grip_min: 0.0
+  grip_max: 0.085
+  safe_grip_min: 0.010
+  safe_grip_max: 0.070
+
+force:
+  smoothing_alpha: 0.15
+  contact_threshold: 5.0
+  contact_hold_sec: 0.10
+  no_contact_hold_sec: 0.20
+  combine_method: "sum"
+  target_low: 30.0
+  target_high: 80.0
+  emergency_high: 220.0
+  level_thresholds: [5.0, 50.0, 100.0]
+
+state_machine:
+  auto_wait_sec: 1.0
+  perturb_interval_min_sec: 1.0 #5
+  perturb_interval_max_sec: 3.0 #9
+  perturb_duration_sec: 2.0
+  auto_grip_speed: 0.012
+  max_auto_delta: 0.024 #0.004
+  allow_auto_close: true
+  allow_auto_open: true
+
+logging:
+  sample_period_sec: 0.05
+  print_period_sec: 0.2
+  show_gui_force_text: false
+  save_time_series_csv: true
+  save_event_csv: true
+  log_init_phase: false

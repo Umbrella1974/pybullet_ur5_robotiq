@@ -175,6 +175,17 @@ def create_environment():
     return env
 
 
+def print_action_as_yaml(action):
+    print("\ninitial_action:")
+    print(f"  x: {float(action[0]):.6f}")
+    print(f"  y: {float(action[1]):.6f}")
+    print(f"  z: {float(action[2]):.6f}")
+    print(f"  roll: {float(action[3]):.6f}")
+    print(f"  pitch: {float(action[4]):.6f}")
+    print(f"  yaw: {float(action[5]):.6f}")
+    print(f"  gripper_opening: {float(action[6]):.6f}")
+
+
 def keyboard_control_demo():
     env = create_environment()
 
@@ -228,6 +239,7 @@ def keyboard_control_demo():
     print("  Z / X : close / open")
     print("\nDebug:")
     print("  P     : print current contact links")
+    print("  V     : print current action as yaml")
     print("  Q     : quit\n")
 
     try:
@@ -241,6 +253,9 @@ def keyboard_control_demo():
             # Print current contact details
             if key_triggered(keys, ord("p")) or key_triggered(keys, ord("P")):
                 print_current_contacts(env)
+
+            if key_triggered(keys, ord("v")) or key_triggered(keys, ord("V")):
+                print_action_as_yaml(action)
 
             # Position control
             if key_down(keys, ord("i")) or key_down(keys, ord("I")):
